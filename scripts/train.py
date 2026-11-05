@@ -13,7 +13,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from duckietown_seg.data.dataset import DuckietownLaneSegmentationDataset, build_train_val_datasets
+from duckietown_seg.data.dataset import build_datasets_from_config
 from duckietown_seg.engine.trainer import SegmentationTrainer
 from duckietown_seg.models import create_model
 from duckietown_seg.utils.config import load_experiment_config
@@ -40,18 +40,14 @@ def main() -> None:
 
     dataset_cfg = config["dataset"]
     dataset_root = PROJECT_ROOT / str(dataset_cfg["root"])
-    dataset = DuckietownLaneSegmentationDataset(
+    datasets = build_datasets_from_config(
+        dataset_cfg=dataset_cfg,
         dataset_root=dataset_root,
-        image_dirname=str(dataset_cfg["image_dirname"]),
-        mask_dirname=str(dataset_cfg["mask_dirname"]),
         image_size=config["input"]["image_size"],
         num_classes=int(config["model"]["num_classes"]),
     )
-    train_dataset, val_dataset = build_train_val_datasets(
-        dataset,
-        val_fraction=float(dataset_cfg["val_fraction"]),
-        split_seed=int(dataset_cfg["split_seed"]),
-    )
+    train_dataset = datasets["train"]
+    val_dataset = datasets["val"]
 
     batch_size = int(config["train"]["batch_size"])
     num_workers = int(dataset_cfg.get("num_workers", 0))
@@ -95,4 +91,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

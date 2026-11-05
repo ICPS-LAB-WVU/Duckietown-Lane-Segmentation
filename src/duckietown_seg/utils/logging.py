@@ -18,7 +18,15 @@ def configure_logging() -> logging.Logger:
 
 
 class OptionalWandbLogger:
-    def __init__(self, enabled: bool, project: str, config: dict[str, Any], entity: str | None = None) -> None:
+    def __init__(
+        self,
+        enabled: bool,
+        project: str,
+        config: dict[str, Any],
+        entity: str | None = None,
+        name: str | None = None,
+        group: str | None = None,
+    ) -> None:
         self.enabled = False
         self.run = None
         if not enabled:
@@ -28,7 +36,7 @@ class OptionalWandbLogger:
         except Exception:
             LOGGER.warning("wandb is not available. Continuing without wandb logging.")
             return
-        self.run = wandb.init(project=project, entity=entity, config=config)
+        self.run = wandb.init(project=project, entity=entity, config=config, name=name, group=group)
         self.enabled = True
 
     def log(self, metrics: dict[str, Any]) -> None:
@@ -43,4 +51,3 @@ class OptionalWandbLogger:
     def finish(self) -> None:
         if self.enabled and self.run is not None:
             self.run.finish()
-

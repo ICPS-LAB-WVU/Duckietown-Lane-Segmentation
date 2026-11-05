@@ -25,6 +25,7 @@ def evaluate_model(
     dice_weight: float,
     ce_weight: float,
     focal_weight: float,
+    ignore_index: int | None = None,
     progress_description: str = "Evaluating",
 ) -> dict[str, float | list[float]]:
     model.eval()
@@ -46,6 +47,7 @@ def evaluate_model(
             dice_weight=dice_weight,
             ce_weight=ce_weight,
             focal_weight=focal_weight,
+            ignore_index=ignore_index,
         )
         running_loss += float(loss.detach().cpu())
         metric_rows.append(
@@ -55,6 +57,7 @@ def evaluate_model(
                 num_classes=num_classes,
                 lane_class_ids=lane_class_ids,
                 boundary_tolerance=boundary_tolerance,
+                ignore_index=ignore_index,
             )
         )
         batches += 1
@@ -62,4 +65,3 @@ def evaluate_model(
     metrics = average_metric_dicts(metric_rows)
     metrics["loss"] = running_loss / max(batches, 1)
     return metrics
-

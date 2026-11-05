@@ -13,7 +13,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from duckietown_seg.data.dataset import DuckietownLaneSegmentationDataset, build_train_val_datasets
+from duckietown_seg.data.dataset import build_datasets_from_config
 from duckietown_seg.engine.evaluator import evaluate_model
 from duckietown_seg.losses.segmentation_losses import estimate_class_weights, estimate_focal_alpha
 from duckietown_seg.models import create_model
@@ -34,24 +34,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_dataset_for_split(config: dict, split: str) -> DuckietownLaneSegmentationDataset:
+def build_dataset_for_split(config: dict, split: str):
     dataset_cfg = config["dataset"]
     dataset_root = PROJECT_ROOT / str(dataset_cfg["root"])
-    if split == "test":
-        image_dirname = dataset_cfg.get("test_image_dirname")
-        mask_dirname = dataset_cfg.get("test_mask_dirname")
-        if not image_dirname or not mask_dirname:
-            raise ValueError("test split requested but test_image_dirname/test_mask_dirname are not defined in config.")
-    else:
-        image_dirname = dataset_cfg["image_dirname"]
-        mask_dirname = dataset_cfg["mask_dirname"]
-    return DuckietownLaneSegmentationDataset(
+    datasets = build_datasets_from_config(
+        dataset_cfg=dataset_cfg,
         dataset_root=dataset_root,
-        image_dirname=str(image_dirname),
-        mask_dirname=str(mask_dirname),
         image_size=config["input"]["image_size"],
         num_classes=int(config["model"]["num_classes"]),
     )
+    if split == "full":
+        if "full" in datasets:
+            return datasets["full"]
+        raise ValueError("full split requested but no full dataset is available in config.")
+    if split not in datasets:
+        raise ValueError(f"{split} split requested but no dataset is available for it in config.")
+    return datasets[split]
 
 
 def main() -> None:
@@ -65,14 +63,7 @@ def main() -> None:
     num_workers = int(dataset_cfg.get("num_workers", 0))
     pin_memory = bool(dataset_cfg.get("pin_memory", True)) and torch.cuda.is_available()
 
-    if args.split == "val":
-        _, eval_dataset = build_train_val_datasets(
-            dataset,
-            val_fraction=float(dataset_cfg["val_fraction"]),
-            split_seed=int(dataset_cfg["split_seed"]),
-        )
-    else:
-        eval_dataset = dataset
+    eval_dataset = dataset
 
     eval_loader = DataLoader(
         eval_dataset,
@@ -87,12 +78,8 @@ def main() -> None:
     checkpoint = torch.load(args.checkpoint, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
-    if args.split == "val":
-        train_dataset, _ = build_train_val_datasets(
-            dataset,
-            val_fraction=float(dataset_cfg["val_fraction"]),
-            split_seed=int(dataset_cfg["split_seed"]),
-        )
+    if dataset_cfg.get("train_split_file"):
+        train_dataset = build_dataset_for_split(config, "train")
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -103,8 +90,9 @@ def main() -> None:
     else:
         train_loader = eval_loader
 
-    class_weights = estimate_class_weights(train_loader, int(config["model"]["num_classes"]), device)
-    focal_alpha = estimate_focal_alpha(train_loader, int(config["model"]["num_classes"]), device)
+    ignore_index = dataset_cfg.get("ignore_index")
+    class_weights = estimate_class_weights(train_loader, int(config["model"]["num_classes"]), device, ignore_index=ignore_index)
+    focal_alpha = estimate_focal_alpha(train_loader, int(config["model"]["num_classes"]), device, ignore_index=ignore_index)
     metrics = evaluate_model(
         model=model,
         dataloader=eval_loader,
@@ -119,6 +107,7 @@ def main() -> None:
         dice_weight=float(config["train"].get("dice_weight", 0.5)),
         ce_weight=float(config["train"].get("ce_weight", 0.5)),
         focal_weight=float(config["train"].get("focal_weight", 0.5)),
+        ignore_index=ignore_index,
         progress_description=f"Evaluate {args.split}",
     )
     LOGGER.info("Evaluation metrics: %s", metrics)
@@ -126,4 +115,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

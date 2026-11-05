@@ -31,8 +31,10 @@ metrics:
   boundary_tolerance: 2
 logging:
   use_wandb: false
-  project: duckietown-lane-seg
+  project: iCPS Segmentation Duckietown
   entity: null
+  group: null
+  run_name: null
 profiling:
   enabled: true
   fps_runs: 30

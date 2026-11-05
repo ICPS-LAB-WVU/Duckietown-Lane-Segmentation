@@ -1,247 +1,143 @@
-# Duckietown Lane Segmentation
+# iCPS Duckietown U-Net Lane Segmentation
 
-Clean, reproducible Duckietown lane segmentation experiments with an explicit vanilla U-Net baseline and a configurable U-Net family for ablations. The refactor is organized as a normal Python package with YAML-driven experiments, deterministic train/val splitting, optional profiling, and a single shell command to launch all supported model variants.
+Training and evaluation code for four-class semantic segmentation of Duckietown road/lane markings. The project supports a vanilla U-Net and configurable U-Net variants for coursework and ablation studies.
 
-## Features
+## 1. Download the dataset
 
-- Explicit `vanilla_unet` baseline that returns logits only.
-- `configurable_unet` with fair outer topology and optional:
-  - depthwise separable convolutions
-  - SE decoder attention
-  - ASPP-lite bottleneck context
-- Multi-class segmentation losses built around logits:
-  - `focal_dice`
-  - `dice_ce`
-  - `dsc`
-  - `cross_entropy`
-- Metrics for research comparisons:
-  - mean IoU
-  - per-class IoU
-  - Dice score
-  - per-class precision, recall, F1
-  - lane-only pixel F1
-  - boundary F1
-- Training artifacts:
-  - best checkpoint by validation mIoU
-  - final checkpoint
-  - per-epoch CSV log
-  - resolved config snapshot
-  - summary JSON
-- Optional `wandb` logging and optional profiling utilities.
+The image dataset is distributed separately from GitHub as a ZIP file on Google Drive:
 
-## Repository Layout
+- **Dataset ZIP (Google Drive):** ADD_DIRECT_FILE_LINK_HERE
+- [Google Drive dataset collection](https://drive.google.com/drive/u/2/folders/1hWvWdAzXQ5eNcMSHI9sk4jbJ0C0aexsJ) (access depends on the folder's sharing settings)
+
+Download **`iCPS_Duckietown_Lane_Segmentation_Dataset.zip`**. The ZIP must have these two folders at its top level:
 
 ```text
-.
-├── README.md
-├── requirements.txt
-├── pyproject.toml
-├── .gitignore
-├── configs
-│   ├── model
-│   │   ├── vanilla.yaml
-│   │   ├── depthwise.yaml
-│   │   ├── se_decoder.yaml
-│   │   ├── aspp.yaml
-│   │   ├── depthwise_se.yaml
-│   │   ├── depthwise_aspp.yaml
-│   │   ├── se_aspp.yaml
-│   │   └── full.yaml
-│   └── train
-│       ├── default.yaml
-│       ├── focal_dice.yaml
-│       ├── dice_ce.yaml
-│       └── dsc.yaml
-├── scripts
+trainTRACKimg/
+trainTRACKmask/
+```
+
+This release contains 4,950 RGB images and 4,950 corresponding indexed segmentation masks. The four mask IDs are described below.
+
+## 2. Set up the project (Ubuntu / Linux)
+
+```bash
+git clone https://github.com/ICPS-LAB-WVU/duckietown-unet-lane-segmentation.git
+cd duckietown-unet-lane-segmentation
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+
+mkdir -p datasets
+unzip ~/Downloads/iCPS_Duckietown_Lane_Segmentation_Dataset.zip -d datasets/
+```
+
+> **Note:** Replace the GitHub URL if your instructor publishes this project at a different address. If the ZIP is downloaded to another location, update the unzip command accordingly.
+
+After extraction the layout **must** be:
+
+```text
+duckietown-unet-lane-segmentation/
+├── configs/
+│   ├── model/
+│   └── train/
+├── datasets/
+│   ├── trainTRACKimg/        # RGB images
+│   └── trainTRACKmask/       # indexed PNG masks
+├── scripts/
 │   ├── train.py
 │   ├── evaluate.py
 │   └── run_all.sh
-├── src
-│   └── duckietown_seg
-│       ├── __init__.py
-│       ├── data
-│       │   ├── dataset.py
-│       │   └── transforms.py
-│       ├── models
-│       │   ├── __init__.py
-│       │   ├── blocks.py
-│       │   ├── vanilla_unet.py
-│       │   └── configurable_unet.py
-│       ├── losses
-│       │   └── segmentation_losses.py
-│       ├── metrics
-│       │   └── segmentation_metrics.py
-│       ├── engine
-│       │   ├── trainer.py
-│       │   └── evaluator.py
-│       └── utils
-│           ├── config.py
-│           ├── seed.py
-│           ├── io.py
-│           ├── logging.py
-│           └── profiling.py
-└── outputs
-    └── .gitkeep
+├── src/
+├── README.md
+├── requirements.txt
+└── pyproject.toml
 ```
 
-## Dataset Layout
+Do not create `train/`, `val/` or `test/` subfolders for this dataset. The training pipeline builds its own train/validation split.
 
-The training config expects the dataset root to point to a folder like this:
+## 3. Confirm that the dataset was extracted correctly
 
-```text
-datasets/
-├── trainTRACKimg/
-│   ├── 0.jpg
-│   ├── 1.jpg
-│   └── ...
-└── trainTRACKmask/
-    ├── 0.png
-    ├── 1.png
-    └── ...
-```
-
-Important dataset assumptions:
-
-- RGB inputs are loaded from `trainTRACKimg`.
-- grayscale masks with class indices are loaded from `trainTRACKmask`.
-- sample pairing is validated by filename stem, not by blind positional sorting.
-- valid label ids are:
-  - `0 = background`
-  - `1, 2, 3 = lane-related classes`
-- masks are resized with nearest-neighbor interpolation.
-
-If you have a separate test set, add `test_image_dirname` and `test_mask_dirname` under `dataset:` in a train config and then run `scripts/evaluate.py --split test`.
-
-## Installation
+From the repository root:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+find datasets/trainTRACKimg -maxdepth 1 -type f | wc -l
+find datasets/trainTRACKmask -maxdepth 1 -type f | wc -l
 ```
 
-`wandb` is optional. Set `logging.use_wandb: true` in a train config if you want online experiment tracking. The code still runs if `wandb` is unavailable.
+Both commands should print **4950**.
 
-## Training
-
-Example training command:
+To check that the Python environment can import the training package:
 
 ```bash
-python3 scripts/train.py \
+python -c "import torch, duckietown_seg; print('PyTorch:', torch.__version__); print('Import OK')"
+```
+
+## 4. Train the baseline U-Net
+
+```bash
+python scripts/train.py \
   --model-config configs/model/vanilla.yaml \
-  --train-config configs/train/focal_dice.yaml
+  --train-config configs/train/default.yaml
 ```
 
-This writes artifacts under `outputs/vanilla/focal_dice/` by default. You can override the directory with `--output-dir`.
+The default configuration uses 256 × 256 inputs, batch size 8, AdamW, cross-entropy loss, a maximum of 30 epochs, validation fraction 0.1 and split seed 42. The trainer saves run artifacts under `outputs/`.
 
-## Evaluation
+For a clean 4,950-pair dataset with the default settings, the expected split is **4,455 training pairs and 495 validation pairs** (557 training batches at batch size 8 if no samples are dropped). If the progress bar shows a different total, check which configuration and dataset root are actually being used.
 
-Evaluate the best checkpoint on the validation split:
+A first run can take a while on CPU. The command above launches the full experiment; it is not a short smoke test.
+
+## 5. Try another U-Net variant
+
+Swap the model configuration; no code modification is required. For example:
 
 ```bash
-python3 scripts/evaluate.py \
-  --model-config configs/model/full.yaml \
-  --train-config configs/train/focal_dice.yaml \
-  --checkpoint outputs/full/best_checkpoint.pth \
-  --split val
+python scripts/train.py \
+  --model-config configs/model/depthwise.yaml \
+  --train-config configs/train/default.yaml
 ```
 
-For a full-directory run created by the default trainer layout, a common checkpoint path is:
+Available model configurations include `vanilla`, `depthwise`, `se_decoder`, `aspp`, `depthwise_se`, `depthwise_aspp`, `se_aspp` and `full`.
 
-```bash
-outputs/full/focal_dice/best_checkpoint.pth
+Other loss/training configurations are available in `configs/train/`, including `dice_ce.yaml`, `focal_dice.yaml` and `dsc.yaml`. The `merged_640*.yaml` configurations may use different dataset or input settings; read them before running.
+
+**Instructor note:** `scripts/run_all.sh` launches many model/configuration combinations. Do not use it for a first test or a small course assignment.
+
+## 6. Dataset labels and evaluation
+
+Each mask is a single-channel image with categorical pixel IDs:
+
+| ID | Class |
+|---|---|
+| 0 | Background |
+| 1 | Red transverse marking / stop line |
+| 2 | White lane marking |
+| 3 | Yellow lane marking |
+
+The class labels were identified from the supplied dataset visualizations. The loader uses nearest-neighbor interpolation for resizing segmentation masks so integer labels remain valid.
+
+The default trainer makes a deterministic **random image-level 90/10 training/validation split**, not a sequence-disjoint split. **There is no independently verified held-out test set in this original dataset release.** Do not report the validation metrics as results from an unseen test set.
+
+For evaluating a saved checkpoint, use the repository's `scripts/evaluate.py` command with `--checkpoint` and `--split val`. The checkpoint must be produced by a compatible model configuration.
+
+## 7. Weights & Biases (optional)
+
+Online experiment tracking is **not required** for coursework. In `configs/train/default.yaml` use:
+
+```yaml
+logging:
+  use_wandb: false
 ```
 
-## Run All Variants
+To use Weights & Biases for research experiments, change this setting to `true` and configure your own account. Do not commit API keys, `.netrc` files or private experiment credentials.
 
-Run all ablation variants with one command:
+## 8. Repository contents and citation
 
-```bash
-bash scripts/run_all.sh
-```
+The GitHub repository contains the training code, model and experiment configurations, and documentation. The dataset ZIP, generated outputs, W&B run files, environments and model checkpoints are **not** included in Git.
 
-Use a different train config:
+Related publication: M. Al Islam and A. S. El-Wakeel, *Adversarial Robustness Analysis of Cloud-Assisted Autonomous Driving Systems*, IEEE SM 2026. [DOI: 10.1109/SM69703.2026.11614113](https://doi.org/10.1109/SM69703.2026.11614113).
 
-```bash
-bash scripts/run_all.sh configs/train/dice_ce.yaml
-```
+This repository provides training code and data access for education/research. It does not claim to reproduce the paper's exact trained detector or historical evaluation split.
 
-The script runs these variants:
-
-- `vanilla`
-- `depthwise`
-- `se_decoder`
-- `aspp`
-- `depthwise_se`
-- `depthwise_aspp`
-- `se_aspp`
-- `full`
-
-Each run writes to its own directory, for example:
-
-```text
-outputs/vanilla/
-outputs/depthwise/
-outputs/full/
-```
-
-Each directory contains `run.log`, checkpoints, metrics CSV, config snapshot, and summary JSON.
-
-## Model Variants
-
-- `vanilla`: explicit baseline U-Net with standard convolutions only.
-- `depthwise`: configurable U-Net with depthwise separable convolutions only.
-- `se_decoder`: configurable U-Net with decoder SE attention only.
-- `aspp`: configurable U-Net with ASPP-lite bottleneck only.
-- `depthwise_se`: depthwise separable convolutions plus decoder SE attention.
-- `depthwise_aspp`: depthwise separable convolutions plus ASPP-lite.
-- `se_aspp`: decoder SE attention plus ASPP-lite.
-- `full`: depthwise separable convolutions, decoder SE attention, and ASPP-lite together.
-
-All variants use the same outer U-Net topology and default channel sizes so ablations remain fair unless you intentionally change the config.
-
-## Reproducibility Notes
-
-- The train/val split is deterministic through `dataset.split_seed`.
-- Global seeding is applied to Python, NumPy, and PyTorch.
-- cuDNN deterministic mode is enabled for reproducibility.
-- Models return logits, not probabilities.
-- Losses and metrics apply softmax only when needed.
-- No dataset paths are hardcoded in Python modules; configs control the dataset root.
-
-## Outputs
-
-Typical run outputs:
-
-- `best_checkpoint.pth`
-- `final_checkpoint.pth`
-- `metrics.csv`
-- `resolved_config.json`
-- `summary.json`
-- `run.log` when launched via `run_all.sh`
-
-## Example Ablation Results
-
-The following table summarizes the completed `focal_dice` batch run stored under `outputs/`. These values came from each variant's `summary.json`, ranked by best validation mIoU.
-
-| Variant | Best Epoch | Best Val mIoU | Dice Score | Lane Pixel F1 | Boundary F1 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `full` | 38 | 0.9199 | 0.9541 | 0.9579 | 0.9782 |
-| `se_decoder` | 38 | 0.9191 | 0.9531 | 0.9576 | 0.9791 |
-| `depthwise_se` | 40 | 0.9184 | 0.9548 | 0.9578 | 0.9787 |
-| `se_aspp` | 35 | 0.9173 | 0.9526 | 0.9569 | 0.9783 |
-| `aspp` | 40 | 0.9102 | 0.9501 | 0.9520 | 0.9747 |
-| `depthwise_aspp` | 39 | 0.9085 | 0.9448 | 0.9463 | 0.9692 |
-| `depthwise` | 40 | 0.8937 | 0.9406 | 0.9397 | 0.9625 |
-| `vanilla` | 39 | 0.8922 | 0.9388 | 0.9403 | 0.9630 |
-
-A consolidated CSV for this run can be generated or inspected at `outputs/variant_comparison.csv`.
-
-## Extending the Project
-
-Use the model registry in [src/duckietown_seg/models/__init__.py](/home/WVU-AD/ma00290/Downloads/Unet%20Train/src/duckietown_seg/models/__init__.py) to add future architectures:
-
-- add a new model class
-- register it in `MODEL_REGISTRY`
-- point a model YAML file at the new `model_name`
+**License:** To be added by the repository owner after confirming code and dataset redistribution rights.

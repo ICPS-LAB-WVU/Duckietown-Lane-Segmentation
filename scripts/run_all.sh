@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TRAIN_CONFIG="${1:-configs/train/focal_dice.yaml}"
 
 VARIANTS=(
   vanilla
@@ -15,14 +14,29 @@ VARIANTS=(
   full
 )
 
-for variant in "${VARIANTS[@]}"; do
-  echo "Starting variant: ${variant}"
-  OUTPUT_DIR="${ROOT_DIR}/outputs/${variant}"
-  mkdir -p "${OUTPUT_DIR}"
-  python3 "${ROOT_DIR}/scripts/train.py" \
-    --model-config "${ROOT_DIR}/configs/model/${variant}.yaml" \
-    --train-config "${ROOT_DIR}/${TRAIN_CONFIG}" \
-    --output-dir "${OUTPUT_DIR}" \
-    2>&1 | tee "${OUTPUT_DIR}/run.log"
-done
+DEFAULT_TRAIN_CONFIGS=(
+  "configs/train/default.yaml"
+  "configs/train/focal_dice.yaml"
+  "configs/train/dice_ce.yaml"
+  "configs/train/dsc.yaml"
+)
 
+if [[ "$#" -eq 0 ]] || [[ "${1:-}" == "all" ]]; then
+  TRAIN_CONFIGS=("${DEFAULT_TRAIN_CONFIGS[@]}")
+else
+  TRAIN_CONFIGS=("$@")
+fi
+
+for train_config in "${TRAIN_CONFIGS[@]}"; do
+  train_name="$(basename "${train_config}" .yaml)"
+  for variant in "${VARIANTS[@]}"; do
+    echo "Starting variant=${variant} loss_config=${train_name}"
+    OUTPUT_DIR="${ROOT_DIR}/outputs/${variant}/${train_name}"
+    mkdir -p "${OUTPUT_DIR}"
+    python3 "${ROOT_DIR}/scripts/train.py" \
+      --model-config "${ROOT_DIR}/configs/model/${variant}.yaml" \
+      --train-config "${ROOT_DIR}/${train_config}" \
+      --output-dir "${OUTPUT_DIR}" \
+      2>&1 | tee "${OUTPUT_DIR}/run.log"
+  done
+done

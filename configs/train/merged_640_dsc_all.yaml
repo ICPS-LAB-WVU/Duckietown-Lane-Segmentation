@@ -1,0 +1,44 @@
+seed: 42
+experiment_name: merged_640_dsc
+output_root: outputs
+dataset:
+  root: /home/WVU-AD/ma00290/Downloads/Pattern_Lane_Segmentation/datasets/merged_consistent
+  image_dirname: images
+  mask_dirname: masks
+  train_split_file: all.txt
+  val_split_file: all.txt
+  test_split_file: all.txt
+  all_split_file: all.txt
+  ignore_index: 255
+  num_workers: 2
+  pin_memory: true
+input:
+  image_size: [640, 640]
+train:
+  batch_size: 8
+  epochs: 100
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 30
+  early_stopping_min_delta: 0.0
+  amp: false
+  loss_name: dsc
+  use_class_weights: true
+  focal_gamma: 2.0
+  focal_weight: 0.5
+  dice_weight: 0.5
+  ce_weight: 0.5
+metrics:
+  lane_class_ids: [1, 2, 3]
+  boundary_tolerance: 2
+logging:
+  use_wandb: false
+  project: iCPS Segmentation Duckietown
+  entity: null
+  group: merged_640
+  run_name: null
+profiling:
+  enabled: true
+  fps_runs: 30
+  fps_warmup: 5

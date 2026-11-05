@@ -48,15 +48,17 @@ class SegmentationTrainer:
         self.device = device
         self.num_classes = int(config["model"]["num_classes"])
         self.train_cfg = config["train"]
+        self.dataset_cfg = config["dataset"]
         self.metric_cfg = config["metrics"]
+        self.ignore_index = self.dataset_cfg.get("ignore_index")
         self.use_amp = bool(self.train_cfg.get("amp", False)) and device.type == "cuda"
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)
         self.class_weights = (
-            estimate_class_weights(train_loader, self.num_classes, device)
+            estimate_class_weights(train_loader, self.num_classes, device, ignore_index=self.ignore_index)
             if self.train_cfg.get("use_class_weights", True)
             else None
         )
-        self.focal_alpha = estimate_focal_alpha(train_loader, self.num_classes, device)
+        self.focal_alpha = estimate_focal_alpha(train_loader, self.num_classes, device, ignore_index=self.ignore_index)
         self.optimizer = self._build_optimizer()
         self.artifacts = TrainerArtifacts(
             output_dir=self.output_dir,
@@ -78,11 +80,20 @@ class SegmentationTrainer:
             ],
         )
         logging_cfg = self.config.get("logging", {})
+        model_group = self.config["model"].get("model_name", "model")
+        variant_name = self.output_dir.parent.name if self.output_dir.parent != self.output_dir else self.output_dir.name
+        config_name = self.output_dir.name
+        default_group = variant_name or str(model_group)
+        default_run_name = f"{variant_name}-{config_name}" if variant_name else str(config_name)
+        configured_run_name = logging_cfg.get("run_name")
+        configured_group = logging_cfg.get("group")
         self.wandb = OptionalWandbLogger(
             enabled=bool(logging_cfg.get("use_wandb", False)),
-            project=str(logging_cfg.get("project", "duckietown-lane-seg")),
+            project=str(logging_cfg.get("project", "iCPS Segmentation Duckietown")),
             entity=logging_cfg.get("entity"),
             config=config,
+            name=str(configured_run_name) if configured_run_name else default_run_name,
+            group=str(configured_group) if configured_group else default_group,
         )
 
     def _build_optimizer(self) -> torch.optim.Optimizer:
@@ -119,6 +130,7 @@ class SegmentationTrainer:
                 dice_weight=float(self.train_cfg.get("dice_weight", 0.5)),
                 ce_weight=float(self.train_cfg.get("ce_weight", 0.5)),
                 focal_weight=float(self.train_cfg.get("focal_weight", 0.5)),
+                ignore_index=self.ignore_index,
                 progress_description=f"Validation {epoch}",
             )
 
@@ -180,6 +192,7 @@ class SegmentationTrainer:
             dice_weight=float(self.train_cfg.get("dice_weight", 0.5)),
             ce_weight=float(self.train_cfg.get("ce_weight", 0.5)),
             focal_weight=float(self.train_cfg.get("focal_weight", 0.5)),
+            ignore_index=self.ignore_index,
             progress_description="Final evaluation",
         )
 
@@ -232,7 +245,7 @@ class SegmentationTrainer:
             masks = masks.to(self.device, non_blocking=True)
             self.optimizer.zero_grad(set_to_none=True)
 
-            with torch.cuda.amp.autocast(enabled=self.use_amp):
+            with torch.amp.autocast("cuda", enabled=self.use_amp):
                 logits = self.model(images)
                 loss, _ = build_loss(
                     str(self.train_cfg["loss_name"]),
@@ -244,6 +257,7 @@ class SegmentationTrainer:
                     dice_weight=float(self.train_cfg.get("dice_weight", 0.5)),
                     ce_weight=float(self.train_cfg.get("ce_weight", 0.5)),
                     focal_weight=float(self.train_cfg.get("focal_weight", 0.5)),
+                    ignore_index=self.ignore_index,
                 )
 
             self.scaler.scale(loss).backward()
@@ -257,6 +271,7 @@ class SegmentationTrainer:
                     num_classes=self.num_classes,
                     lane_class_ids=list(self.metric_cfg["lane_class_ids"]),
                     boundary_tolerance=int(self.metric_cfg.get("boundary_tolerance", 2)),
+                    ignore_index=self.ignore_index,
                 )
             )
 

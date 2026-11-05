@@ -34,6 +34,7 @@ def compute_segmentation_metrics(
     num_classes: int,
     lane_class_ids: Sequence[int],
     boundary_tolerance: int = 2,
+    ignore_index: int | None = None,
 ) -> dict[str, float | list[float]]:
     probabilities = torch.softmax(logits, dim=1)
     predictions = logits_to_predictions(logits)
@@ -46,14 +47,20 @@ def compute_segmentation_metrics(
     recall = true_positive / (true_positive + false_negative + epsilon)
     f1 = 2.0 * precision * recall / (precision + recall + epsilon)
 
-    targets_one_hot = one_hot_encode(targets, num_classes)
-    dice = soft_dice_score(probabilities, targets_one_hot).mean()
+    valid_mask = (targets >= 0) & (targets < num_classes)
+    if ignore_index is not None:
+        valid_mask &= targets != ignore_index
+
+    targets_one_hot = one_hot_encode(targets, num_classes, ignore_index=ignore_index)
+    dice = soft_dice_score(probabilities, targets_one_hot, valid_mask=valid_mask).mean()
 
     lane_predictions = torch.zeros_like(predictions, dtype=torch.bool)
     lane_targets = torch.zeros_like(targets, dtype=torch.bool)
     for class_id in lane_class_ids:
         lane_predictions |= predictions == class_id
         lane_targets |= targets == class_id
+    lane_predictions &= valid_mask
+    lane_targets &= valid_mask
     lane_pixel_f1 = binary_f1(lane_predictions, lane_targets)
     boundary_f1_value = boundary_f1(lane_predictions, lane_targets, tolerance=boundary_tolerance)
 
