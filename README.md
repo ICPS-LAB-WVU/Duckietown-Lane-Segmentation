@@ -1,4 +1,4 @@
-# iCPS Duckietown U-Net Lane Segmentation
+# iCPS Duckietown Lane Segmentation
 
 Training and evaluation code for four-class semantic segmentation of Duckietown road/lane markings. The project supports a vanilla U-Net and configurable U-Net variants for lane segmentation task.
 
