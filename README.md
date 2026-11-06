@@ -1,6 +1,6 @@
 # iCPS Duckietown U-Net Lane Segmentation
 
-Training and evaluation code for four-class semantic segmentation of Duckietown road/lane markings. The project supports a vanilla U-Net and configurable U-Net variants for coursework and ablation studies.
+Training and evaluation code for four-class semantic segmentation of Duckietown road/lane markings. The project supports a vanilla U-Net and configurable U-Net variants for lane segmentation task.
 
 ## 1. Download the dataset
 
@@ -135,6 +135,4 @@ The GitHub repository contains the training code, model and experiment configura
 
 Related publication: M. Al Islam and A. S. El-Wakeel, *Adversarial Robustness Analysis of Cloud-Assisted Autonomous Driving Systems*, IEEE SM 2026. [DOI: 10.1109/SM69703.2026.11614113](https://doi.org/10.1109/SM69703.2026.11614113).
 
-This repository provides training code and data access for education/research. It does not claim to reproduce the paper's exact trained detector or historical evaluation split.
-
-**License:** To be added by the repository owner after confirming code and dataset redistribution rights.
+This repository provides training code and data access for education/research. 
