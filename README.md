@@ -6,8 +6,7 @@ Training and evaluation code for four-class semantic segmentation of Duckietown 
 
 The image dataset is distributed separately from GitHub as a ZIP file on Google Drive:
 
-- **Dataset ZIP (Google Drive):** ADD_DIRECT_FILE_LINK_HERE
-- [Google Drive dataset collection](https://drive.google.com/drive/u/2/folders/1hWvWdAzXQ5eNcMSHI9sk4jbJ0C0aexsJ) (access depends on the folder's sharing settings)
+- **Dataset ZIP (Google Drive):** https://drive.google.com/file/d/1r2dop_4oLVMfATo5NQ57zTveFTKt9Ed2/view?usp=sharing
 
 Download **`iCPS_Duckietown_Lane_Segmentation_Dataset.zip`**. The ZIP must have these two folders at its top level:
 
@@ -33,7 +32,6 @@ mkdir -p datasets
 unzip ~/Downloads/iCPS_Duckietown_Lane_Segmentation_Dataset.zip -d datasets/
 ```
 
-> **Note:** Replace the GitHub URL if your instructor publishes this project at a different address. If the ZIP is downloaded to another location, update the unzip command accordingly.
 
 After extraction the layout **must** be:
 
@@ -102,7 +100,7 @@ Available model configurations include `vanilla`, `depthwise`, `se_decoder`, `as
 
 Other loss/training configurations are available in `configs/train/`, including `dice_ce.yaml`, `focal_dice.yaml` and `dsc.yaml`. The `merged_640*.yaml` configurations may use different dataset or input settings; read them before running.
 
-**Instructor note:** `scripts/run_all.sh` launches many model/configuration combinations. Do not use it for a first test or a small course assignment.
+**Instructor note:** `scripts/run_all.sh` launches many model/configuration combinations. Do not use it for a first test.
 
 ## 6. Dataset labels and evaluation
 
@@ -117,7 +115,6 @@ Each mask is a single-channel image with categorical pixel IDs:
 
 The class labels were identified from the supplied dataset visualizations. The loader uses nearest-neighbor interpolation for resizing segmentation masks so integer labels remain valid.
 
-The default trainer makes a deterministic **random image-level 90/10 training/validation split**, not a sequence-disjoint split. **There is no independently verified held-out test set in this original dataset release.** Do not report the validation metrics as results from an unseen test set.
 
 For evaluating a saved checkpoint, use the repository's `scripts/evaluate.py` command with `--checkpoint` and `--split val`. The checkpoint must be produced by a compatible model configuration.
 
